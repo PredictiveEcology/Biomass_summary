@@ -15,6 +15,7 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = list("README.md", "Biomass_summary.Rmd"), ## README generated from module Rmd
   reqdPkgs = list("assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
+                  "PredictiveEcology/LandR@development (>= 1.0.7.9005)",
                   "raster", "rasterVis", "RColorBrewer", "SpaDES.core (>= 1.0.10)", "SpaDES.tools", "qs"),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
@@ -70,11 +71,12 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
       # do stuff for this event
 browser()
       files2upload <- lapply(P(sim)$studyAreaNames, function(studyAreaName) {
-        lapply(P(sim)$climateScenarios, function(cs) {
-          sim <- loadSimList(file.path("outputs", studyAreaName,
-                                       paste0("simOutPreamble_", studyAreaName, "_", gsub("SSP", "", cs), ".qs")))
-          rasterToMatch <- sim$rasterToMatchReporting
-          rm(sim)
+        lapply(P(sim)$climateScenarios, function(climateScenario) {
+          tmp <- loadSimList(file.path("outputs", studyAreaName,
+                                       paste0("simOutPreamble_", studyAreaName, "_",
+                                              gsub("SSP", "", climateScenario), ".qs")))
+          rasterToMatch <- tmp$rasterToMatchReporting
+          rm(tmp)
 
           if (grepl("ROF", studyAreaName)) {
             if (unique(res(rasterToMatch)) == 250) {
@@ -82,9 +84,9 @@ browser()
             }
           }
 
-           plotLeadingSpecies(
+          plotLeadingSpecies(
             studyAreaName = studyAreaName,
-            climateScenario = cs,
+            climateScenario = climateScenario,
             Nreps = P(sim)$reps,
             years = P(sim)$years,
             outputDir = P(sim)$simOutputPath,
@@ -123,25 +125,23 @@ browser()
 ### template initialization
 Init <- function(sim) {
   # # ! ----- EDIT BELOW ----- ! #
-browser()
+
   ## TODO: inventory all files to ensure correct dir structure? compare against expected files?
   #filesUserHas <- fs::dir_ls(P(sim)$simOutputPath, recurse = TRUE, type = "file", glob = "*.qs")
 
-  filesUserExpects <- rbindlist(
-    lapply(studyAreaNames, function(studyAreaName) {
-      rbindlist(lapply(climateScenarios, function(cs) {
-        rbindlist(lapply(reps, function(rep) {
-          runName <- sprintf("%s_%s_run%0d", studyAreaName, cs, run)
-          f <- file.path("outputs", runName, paste0(runName, ".qs"))
+  filesUserExpects <- rbindlist(lapply(P(sim)$studyAreaNames, function(studyAreaName) {
+    rbindlist(lapply(P(sim)$climateScenarios, function(climateScenario) {
+      rbindlist(lapply(P(sim)$reps, function(rep) {
+        runName <- sprintf("%s_%s_run%02d", studyAreaName, climateScenario, as.integer(rep))
+        f <- file.path(P(sim)$simOutputPath, runName, paste0(runName, ".qs"))
 
-          data.table(file = f, exists = file.exists(f))
-        }))
+        data.table(file = f, exists = file.exists(f))
       }))
-    })
-  )
+    }))
+  }))
 
-  if (!all(allSimFiles$exists)) {
-    missing <- allSimFiles[exists == FALSE, ]$file
+  if (!all(filesUserExpects$exists)) {
+    missing <- filesUserExpects[exists == FALSE, ]$file
     stop("Some simulation files missing:\n", paste(missing, collapse = "\n"))
   }
 
