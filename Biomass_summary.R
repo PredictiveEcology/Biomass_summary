@@ -15,8 +15,9 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = list("README.md", "Biomass_summary.Rmd"), ## README generated from module Rmd
   reqdPkgs = list("assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
-                  "PredictiveEcology/LandR@development (>= 1.0.7.9005)",
-                  "raster", "rasterVis", "RColorBrewer", "SpaDES.core (>= 1.0.10)", "SpaDES.tools", "qs"),
+                  "PredictiveEcology/LandR@development (>= 1.0.7.9012)",
+                  "purrr", "raster", "rasterVis", "RColorBrewer",
+                  "SpaDES.core (>= 1.0.10)", "SpaDES.tools", "qs"),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
     defineParameter("climateScenarios", "character", NA, NA, NA,
@@ -28,7 +29,9 @@ defineModule(sim, list(
     defineParameter("studyAreaNames", "character", NA, NA, NA,
                     desc = "names of study areas simulated."),
     defineParameter("reps", "integer", 1:10, 1, NA,
-                    desc = "number of replicates/runs per study area and climate scenario."),
+                    desc = paste("number of replicates/runs per study area and climate scenario.",
+                                 "NOTE: `mclapply` is used internally, so you should set",
+                                 "`options(mc.cores = nReps)` to run in parallel.")),
     defineParameter("upload", "logical", FALSE, NA, NA,
                     desc = "if TRUE, uses the `googledrive` package to upload figures."),
     defineParameter("years", "integer", c(2011, 2100), NA, NA,
@@ -56,34 +59,22 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
   switch(
     eventType,
     init = {
-      ### check for more detailed object dependencies:
-      ### (use `checkObject` or similar)
-
       # do stuff for this event
       sim <- Init(sim)
 
       # schedule future event(s)
       sim <- scheduleEvent(sim, start(sim), "Biomass_summary", "plot_leadingSpecies")
-      sim <- scheduleEvent(sim, start(sim), "Biomass_summary", "upload", .last())
+
+      if (isTRUE(P(sim)$upload)) {
+        sim <- scheduleEvent(sim, end(sim), "Biomass_summary", "upload", .last())
+      }
     },
     plot_leadingSpecies = {
       # ! ----- EDIT BELOW ----- ! #
       # do stuff for this event
-browser()
+
       files2upload <- lapply(P(sim)$studyAreaNames, function(studyAreaName) {
         lapply(P(sim)$climateScenarios, function(climateScenario) {
-          tmp <- loadSimList(file.path("outputs", studyAreaName,
-                                       paste0("simOutPreamble_", studyAreaName, "_",
-                                              gsub("SSP", "", climateScenario), ".qs")))
-          rasterToMatch <- tmp$rasterToMatchReporting
-          rm(tmp)
-
-          if (grepl("ROF", studyAreaName)) {
-            if (unique(res(rasterToMatch)) == 250) {
-              rasterToMatch <- disaggregate(rasterToMatch, fact = 2) ## 125 m pixels from sims
-            }
-          }
-
           plotLeadingSpecies(
             studyAreaName = studyAreaName,
             climateScenario = climateScenario,
@@ -91,9 +82,9 @@ browser()
             years = P(sim)$years,
             outputDir = P(sim)$simOutputPath,
             treeSpecies = sim$treeSpecies,
-            defineLeading = .defineLeading, ## TODO: allow user override?
-            leadingPercentage = 0.8,        ## TODO: allow user override?
-            treeType = NULL,                ## TODO: allow user override?
+            defineLeading = LandR:::.defineLeading, ## TODO: allow user override?
+            leadingPercentage = 0.8,                ## TODO: allow user override?
+            treeType = NULL,                        ## TODO: allow user override?
             rasterToMatch = sim$rasterToMatch
           )
         })
@@ -106,11 +97,12 @@ browser()
     },
     upload = {
       # ! ----- EDIT BELOW ----- ! #
-browser()
-      lapply(mod$files2upload, function(f) {
-        drive_put(f, sim$uploadTo[[P(sim)$studyAreaName]], basename(f))
-      })
+      mod$files2upload <- set_names(mod$files2upload, basename(mod$files2upload))
 
+      gid <- as_id(sim$uploadTo[[P(sim)$studyAreaName]])
+      prevUploaded <- drive_ls(gid)
+      toUpload <- mod$files2upload[!(basename(mod$files2upload) %in% prevUploaded$name)]
+      uploaded <- map(toUpload, ~ drive_upload(.x, path = gid))
       # ! ----- STOP EDITING ----- ! #
     },
     warning(paste("Undefined event type: \'", current(sim)[1, "eventType", with = FALSE],
@@ -170,6 +162,18 @@ Init <- function(sim) {
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
 
   # ! ----- EDIT BELOW ----- ! #
+
+  if (!suppliedElsewhere("rasterToMatch", sim)) {
+    tmp <- loadSimList(file.path("outputs", studyAreaName,
+                                 paste0("simOutPreamble_", studyAreaName, "_",
+                                        gsub("SSP", "", climateScenario), ".qs")))
+    sim$rasterToMatch <- tmp$rasterToMatchReporting
+    rm(tmp)
+  }
+
+  if (!suppliedElsewhere("treeSpecies", sim)) {
+    stop("treeSpecies must be supplied.") ## TODO: use Eliot's new function to get kNN spp for the studyArea
+  }
 
   # ! ----- STOP EDITING ----- ! #
   return(invisible(sim))
