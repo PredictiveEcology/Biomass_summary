@@ -15,7 +15,7 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = list("README.md", "Biomass_summary.Rmd"), ## README generated from module Rmd
   reqdPkgs = list("assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
-                  "PredictiveEcology/LandR@development (>= 1.0.7.9012)",
+                  "PredictiveEcology/LandR@development (>= 1.1.0.9026)",
                   "purrr", "raster", "rasterVis", "RColorBrewer",
                   "SpaDES.core (>= 1.0.10)", "SpaDES.tools", "qs"),
   parameters = rbind(
@@ -74,11 +74,30 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
       # do stuff for this event
 
       files2upload <- lapply(P(sim)$studyAreaNames, function(studyAreaName) {
+        ## get rasterToMatch for each studyArea
+        tmp <- loadSimList(file.path(P(sim)$simOutputPath, studyAreaName,
+                                     paste0("simOutPreamble_", studyAreaName, "_",
+                                            gsub("SSP", "", P(sim)$climateScenarios[1]), ".qs")))
+        sim$rasterToMatch <- tmp$rasterToMatchReporting
+        rm(tmp)
+
         lapply(P(sim)$climateScenarios, function(climateScenario) {
+          message(paste("Leading species plot: ", studyAreaName, climateScenario))
+
+          ## TODO: ensure cohortData_2001 is created in sim
+          cd2001 <- file.path(P(sim)$simOutputPath, paste0(studyAreaName, "_", climateScenario),
+                              "rep01", "cohortData_2001_year2001.qs")
+          if (!file.exists(cd2001)) {
+            tmp <- loadSimList(file.path(P(sim)$simOutputPath, paste0(studyAreaName, "_", climateScenario),
+                                         "rep01", paste0("biomassMaps2001_", studyAreaName, ".qs")))
+            qs::qsave(tmp$cohortData, cd2001)
+            rm(tmp)
+          }
+
           plotLeadingSpecies(
             studyAreaName = studyAreaName,
             climateScenario = climateScenario,
-            Nreps = P(sim)$reps,
+            Nreps = max(P(sim)$reps),
             years = P(sim)$years,
             outputDir = P(sim)$simOutputPath,
             treeSpecies = sim$treeSpecies,
@@ -118,14 +137,17 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
 Init <- function(sim) {
   # # ! ----- EDIT BELOW ----- ! #
 
+  checkPath(file.path(P(sim)$simOutputPath, P(sim)$studyAreaNames, "figures"), create = TRUE)
+
   ## TODO: inventory all files to ensure correct dir structure? compare against expected files?
   #filesUserHas <- fs::dir_ls(P(sim)$simOutputPath, recurse = TRUE, type = "file", glob = "*.qs")
 
   filesUserExpects <- rbindlist(lapply(P(sim)$studyAreaNames, function(studyAreaName) {
     rbindlist(lapply(P(sim)$climateScenarios, function(climateScenario) {
       rbindlist(lapply(P(sim)$reps, function(rep) {
-        runName <- sprintf("%s_%s_run%02d", studyAreaName, climateScenario, as.integer(rep))
-        f <- file.path(P(sim)$simOutputPath, runName, paste0(runName, ".qs"))
+        runName <- sprintf("%s_%s", studyAreaName, climateScenario)
+        f <- file.path(P(sim)$simOutputPath, runName, sprintf("rep%02d", as.integer(rep)),
+                       paste0(runName, "_", sprintf("rep%02d", as.integer(rep)), ".qs"))
 
         data.table(file = f, exists = file.exists(f))
       }))
@@ -143,33 +165,11 @@ Init <- function(sim) {
 }
 
 .inputObjects <- function(sim) {
-  # Any code written here will be run during the simInit for the purpose of creating
-  # any objects required by this module and identified in the inputObjects element of defineModule.
-  # This is useful if there is something required before simulation to produce the module
-  # object dependencies, including such things as downloading default datasets, e.g.,
-  # downloadData("LCC2005", modulePath(sim)).
-  # Nothing should be created here that does not create a named object in inputObjects.
-  # Any other initiation procedures should be put in "init" eventType of the doEvent function.
-  # Note: the module developer can check if an object is 'suppliedElsewhere' to
-  # selectively skip unnecessary steps because the user has provided those inputObjects in the
-  # simInit call, or another module will supply or has supplied it. e.g.,
-  # if (!suppliedElsewhere('defaultColor', sim)) {
-  #   sim$map <- Cache(prepInputs, extractURL('map')) # download, extract, load file from url in sourceURL
-  # }
-
   #cacheTags <- c(currentModule(sim), "function:.inputObjects") ## uncomment this if Cache is being used
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
 
   # ! ----- EDIT BELOW ----- ! #
-
-  if (!suppliedElsewhere("rasterToMatch", sim)) {
-    tmp <- loadSimList(file.path("outputs", studyAreaName,
-                                 paste0("simOutPreamble_", studyAreaName, "_",
-                                        gsub("SSP", "", climateScenario), ".qs")))
-    sim$rasterToMatch <- tmp$rasterToMatchReporting
-    rm(tmp)
-  }
 
   if (!suppliedElsewhere("treeSpecies", sim)) {
     stop("treeSpecies must be supplied.") ## TODO: use Eliot's new function to get kNN spp for the studyArea
