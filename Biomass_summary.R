@@ -14,7 +14,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.md", "Biomass_summary.Rmd"), ## README generated from module Rmd
-  reqdPkgs = list("assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
+  reqdPkgs = list("assertthat", "cowplot", "data.table", "disk.frame", "fs", "ggplot2", "googledrive",
                   "PredictiveEcology/LandR@development (>= 1.1.0.9026)",
                   "purrr", "raster", "rasterVis", "RColorBrewer",
                   "SpaDES.core (>= 1.0.10)", "SpaDES.tools", "qs"),
