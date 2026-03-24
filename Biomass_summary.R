@@ -17,7 +17,7 @@ defineModule(sim, list(
   reqdPkgs = list(
     "arrow", "assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
     "purrr", "qs2", "RColorBrewer", "terra", "tidyterra",
-    "PredictiveEcology/LandR@development (>= 1.1.5.9099)",
+    "PredictiveEcology/LandR@development (>= 1.1.5.9100)",
     "PredictiveEcology/SpaDES.core@development (>= 3.0.3.9003)",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.1.9000)"
   ),
