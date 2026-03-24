@@ -9,7 +9,7 @@ defineModule(sim, list(
     person("Ian MS", "Eddy", email = "ian.eddy@nrcan-rncan.gc.ca", role = "aut")
   ),
   childModules = character(0),
-  version = list(Biomass_summary = "1.0.0"),
+  version = list(Biomass_summary = "1.0.1"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -109,7 +109,7 @@ InitMulti <- function(sim) {
   padYearStart <- paddedFloatToChar(P(sim)$years[1], padL = padL)
   padYearEnd <- paddedFloatToChar(P(sim)$years[2], padL = padL)
 
-  checkPath(figurePath(sim), create = TRUE)
+  checkPath(file.path(P(sim)$simOutputPath, "figures", currentModule(sim)), create = TRUE)
 
   cdpgm <- fs::dir_ls(
     P(sim)$simOutputPath,
