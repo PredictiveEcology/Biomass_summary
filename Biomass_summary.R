@@ -9,42 +9,43 @@ defineModule(sim, list(
     person("Ian MS", "Eddy", email = "ian.eddy@nrcan-rncan.gc.ca", role = "aut")
   ),
   childModules = character(0),
-  version = list(Biomass_summary = "0.0.0.9000"),
+  version = list(Biomass_summary = "1.0.0"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.md", "Biomass_summary.Rmd"), ## README generated from module Rmd
-  reqdPkgs = list("assertthat", "cowplot", "data.table", "disk.frame", "fs", "ggplot2", "googledrive",
-                  "PredictiveEcology/LandR@development (>= 1.1.0.9026)",
-                  "purrr", "raster", "rasterVis", "RColorBrewer",
-                  "SpaDES.core (>= 1.0.10)", "SpaDES.tools", "qs"),
+  reqdPkgs = list(
+    "arrow", "assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
+    "purrr", "qs2", "RColorBrewer", "terra", "tidyterra",
+    "PredictiveEcology/LandR@development (>= 1.1.5.9099)",
+    "PredictiveEcology/SpaDES.core@development (>= 3.0.3.9003)",
+    "PredictiveEcology/SpaDES.tools@development (>= 2.1.1.9000)"
+  ),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
-    defineParameter("climateScenarios", "character", NA, NA, NA,
-                    desc = paste("names of CIMP6 climate scenarios including SSP,",
+    defineParameter("climateScenario", "character", NA, NA, NA,
+                    desc = paste("name of CIMP6 climate scenarios including SSP,",
                                  "formatted as in ClimateNA, using underscores as separator.",
                                  "E.g., 'CanESM5_SSP370'.")),
+    defineParameter("mode", "character", "single", NA, NA,
+                    paste("use 'single' to run part of a simulation;",
+                          "use 'multi' to run as part of postprocessing multiple runs.")),
     defineParameter("simOutputPath", "character", outputPath(sim), NA, NA,
                     desc = "Directory specifying the location of the simulation outputs."),
     defineParameter("studyAreaNames", "character", NA, NA, NA,
                     desc = "names of study areas simulated."),
-    defineParameter("reps", "integer", 1:10, 1, NA,
+    defineParameter("reps", "integer", 1L:10L, 1L, NA_integer_,
                     desc = paste("number of replicates/runs per study area and climate scenario.",
                                  "NOTE: `mclapply` is used internally, so you should set",
                                  "`options(mc.cores = nReps)` to run in parallel.")),
-    defineParameter("upload", "logical", FALSE, NA, NA,
-                    desc = "if TRUE, uses the `googledrive` package to upload figures."),
-    defineParameter("years", "integer", c(2011, 2100), NA, NA,
+    defineParameter("years", "integer", c(2011L, 2100L), NA, NA,
                     desc = "Which two simulation years should be compared? Typically start and end years.")
   ),
   inputObjects = bindrows(
-    #expectsInput("objectName", "objectClass", "input object description", sourceURL, ...),
-    expectsInput("rasterToMatch", "RasterLayer", "DESCRIPTION NEEDED", sourceURL = NA),
-    expectsInput("treeSpecies", "data.table", "DESCRIPTION NEEDED", sourceURL = NA),
-    expectsInput("uploadTo", "character",
-                 desc = paste("if `upload = TRUE`, a named list of Google Drive folder ids,",
-                              "corresponding to `studyAreaNames`."),
-                 sourceURL = NA)
+    expectsInput("cohortData", "data.table", "", sourceURL = NA), ## TODO: description needed
+    expectsInput("pixelGroupMap", "SpatRaster", "", sourceURL = NA), ## TODO: description needed
+    expectsInput("rasterToMatch", "SpatRaster", "template raster used for simulations", sourceURL = NA),
+    expectsInput("treeSpecies", "data.table", "species name and deciduous/conifer type", sourceURL = NA)
   ),
   outputObjects = bindrows(
     #createsOutput("objectName", "objectClass", "output object description", ...),
@@ -59,73 +60,39 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
   switch(
     eventType,
     init = {
-      # do stuff for this event
-      sim <- Init(sim)
+      if (P(sim)$mode == "single") {
+        sim <- scheduleEvent(sim, P(sim)$years[1], "Biomass_summary", "save_single", .last())
+        sim <- scheduleEvent(sim, P(sim)$years[2], "Biomass_summary", "save_single", .last())
+      } else if (P(sim)$mode == "multi") {
+        sim <- InitMulti(sim)
 
-      # schedule future event(s)
-      sim <- scheduleEvent(sim, start(sim), "Biomass_summary", "plot_leadingSpecies")
-
-      if (isTRUE(P(sim)$upload)) {
-        sim <- scheduleEvent(sim, end(sim), "Biomass_summary", "upload", .last())
+        f_leading_plot <- LandR::plotLeadingSpecies(
+          studyAreaName = P(sim)$studyAreaName,
+          climateScenario = P(sim)$climateScenario,
+          Nreps = max(P(sim)$reps),
+          years = P(sim)$years,
+          outputDir = P(sim)$simOutputPath,
+          treeSpecies = sim$treeSpecies,
+          defineLeading = LandR:::.defineLeading, ## TODO: allow user override?
+          leadingPercentage = 0.8, ## TODO: allow user override?
+          treeType = NULL, ## TODO: allow user override?
+          rasterToMatch = sim$rasterToMatch
+        )
+        sim <- registerOutputs(f_leading_plot, sim)
       }
     },
-    plot_leadingSpecies = {
-      # ! ----- EDIT BELOW ----- ! #
-      # do stuff for this event
+    save_single = {
+      padYear <- paddedFloatToChar(time(sim), padL = ceiling(log10(end(sim) + 1)))
 
-      files2upload <- lapply(P(sim)$studyAreaNames, function(studyAreaName) {
-        ## get rasterToMatch for each studyArea
-        tmp <- loadSimList(file.path(P(sim)$simOutputPath, studyAreaName,
-                                     paste0("simOutPreamble_", studyAreaName, "_",
-                                            gsub("SSP", "", P(sim)$climateScenarios[1]), ".qs")))
-        sim$rasterToMatch <- tmp$rasterToMatchReporting
-        rm(tmp)
+      f_cohortData <- file.path(outputPath(sim), paste0("cohortData_year", padYear, ".qs2"))
+      qs2::qs_save(sim$cohortData, f_cohortData)
+      sim <- registerOutputs(f_cohortData, sim)
 
-        lapply(P(sim)$climateScenarios, function(climateScenario) {
-          message(paste("Leading species plot: ", studyAreaName, climateScenario))
-
-          ## TODO: ensure cohortData_2001 is created in sim
-          cd2001 <- file.path(P(sim)$simOutputPath, paste0(studyAreaName, "_", climateScenario),
-                              "rep01", "cohortData_2001_year2001.qs")
-          if (!file.exists(cd2001)) {
-            tmp <- loadSimList(file.path(P(sim)$simOutputPath, paste0(studyAreaName, "_", climateScenario),
-                                         "rep01", paste0("biomassMaps2001_", studyAreaName, ".qs")))
-            qs::qsave(tmp$cohortData, cd2001)
-            rm(tmp)
-          }
-
-          plotLeadingSpecies(
-            studyAreaName = studyAreaName,
-            climateScenario = climateScenario,
-            Nreps = max(P(sim)$reps),
-            years = P(sim)$years,
-            outputDir = P(sim)$simOutputPath,
-            treeSpecies = sim$treeSpecies,
-            defineLeading = LandR:::.defineLeading, ## TODO: allow user override?
-            leadingPercentage = 0.8,                ## TODO: allow user override?
-            treeType = NULL,                        ## TODO: allow user override?
-            rasterToMatch = sim$rasterToMatch
-          )
-        })
-      })
-      files2upload <- unlist(files2upload, recursive = TRUE)
-
-      mod$files2upload <- c(mod$files2upload, files2upload)
-
-      # ! ----- STOP EDITING ----- ! #
+      f_pixelGroupMap <- file.path(outputPath(sim), paste0("pixelGroupMap_year", padYear, ".tif"))
+      terra::writeRaster(sim$pixelGroupMap, f_pixelGroupMap, datatype = "INT4U", overwrite = TRUE)
+      sim <- registerOutputs(f_pixelGroupMap, sim)
     },
-    upload = {
-      # ! ----- EDIT BELOW ----- ! #
-      mod$files2upload <- set_names(mod$files2upload, basename(mod$files2upload))
-
-      gid <- as_id(sim$uploadTo[[P(sim)$studyAreaName]])
-      prevUploaded <- drive_ls(gid)
-      toUpload <- mod$files2upload[!(basename(mod$files2upload) %in% prevUploaded$name)]
-      uploaded <- map(toUpload, ~ drive_upload(.x, path = gid))
-      # ! ----- STOP EDITING ----- ! #
-    },
-    warning(paste("Undefined event type: \'", current(sim)[1, "eventType", with = FALSE],
-                  "\' in module \'", current(sim)[1, "moduleName", with = FALSE], "\'", sep = ""))
+    noEventWarning(sim)
   )
   return(invisible(sim))
 }
@@ -134,45 +101,54 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
 #   - keep event functions short and clean, modularize by calling subroutines from section below.
 
 ### template initialization
-Init <- function(sim) {
-  # # ! ----- EDIT BELOW ----- ! #
+InitMulti <- function(sim) {
+  ## check for necessary output files -----------------------------------------------
+  ## NOTE: don't load simLists -- slow and unreliable
+  allReps <- sprintf("rep%02d", P(sim)$reps)
+  padL <- ceiling(log10(P(sim)$years[2] + 1))
+  padYearStart <- paddedFloatToChar(P(sim)$years[1], padL = padL)
+  padYearEnd <- paddedFloatToChar(P(sim)$years[2], padL = padL)
 
-  checkPath(file.path(P(sim)$simOutputPath, P(sim)$studyAreaNames, "figures"), create = TRUE)
+  checkPath(figurePath(sim), create = TRUE)
 
-  ## TODO: inventory all files to ensure correct dir structure? compare against expected files?
-  #filesUserHas <- fs::dir_ls(P(sim)$simOutputPath, recurse = TRUE, type = "file", glob = "*.qs")
+  cdpgm <- fs::dir_ls(
+    P(sim)$simOutputPath,
+    regexp = "cohortData|pixelGroupMap",
+    recurse = 1,
+    type = "file"
+  ) |>
+    grep(paste0("(", paste0(P(sim)$reps, collapse = "|"), ")"), x = _, value = TRUE) |>
+    grep(paste0("_year(", paste0(P(sim)$years, collapse = "|"), ")"), x = _, value = TRUE)
 
-  filesUserExpects <- rbindlist(lapply(P(sim)$studyAreaNames, function(studyAreaName) {
-    rbindlist(lapply(P(sim)$climateScenarios, function(climateScenario) {
-      rbindlist(lapply(P(sim)$reps, function(rep) {
-        runName <- sprintf("%s_%s", studyAreaName, climateScenario)
-        f <- file.path(P(sim)$simOutputPath, runName, sprintf("rep%02d", as.integer(rep)),
-                       paste0(runName, "_", sprintf("rep%02d", as.integer(rep)), ".qs"))
+  filesUserHas <- c(cdpgm)
 
-        data.table(file = f, exists = file.exists(f))
-      }))
-    }))
+  dirsExpected <- file.path(P(sim)$simOutputPath, allReps)
+  filesExpected <- as.character(sapply(dirsExpected, function(d) {
+    c(
+      file.path(d, sprintf("cohortData_year%04d.qs2", P(sim)$years)),
+      file.path(d, sprintf("pixelGroupMap_year%04d.tif", P(sim)$years))
+    )
   }))
 
-  if (!all(filesUserExpects$exists)) {
-    missing <- filesUserExpects[exists == FALSE, ]$file
-    stop("Some simulation files missing:\n", paste(missing, collapse = "\n"))
-  }
+  filesNeeded <- data.frame(file = filesExpected, exists = filesExpected %in% filesUserHas)
 
-  # ! ----- STOP EDITING ----- ! #
+  if (!all(filesNeeded$exists)) {
+    missing <- filesNeeded[filesNeeded$exists == FALSE, ]$file
+    stop(
+      sum(!filesNeeded$exists),
+      " simulation files appear to be missing:\n",
+      paste(missing, collapse = "\n")
+    )
+  }
 
   return(invisible(sim))
 }
 
 .inputObjects <- function(sim) {
-  #cacheTags <- c(currentModule(sim), "function:.inputObjects") ## uncomment this if Cache is being used
-  dPath <- asPath(inputPath(sim), 1)
-  message(currentModule(sim), ": using dataPath '", dPath, "'.")
-
   # ! ----- EDIT BELOW ----- ! #
 
   if (!suppliedElsewhere("treeSpecies", sim)) {
-    stop("treeSpecies must be supplied.") ## TODO: use Eliot's new function to get kNN spp for the studyArea
+    stop("treeSpecies must be supplied.")
   }
 
   # ! ----- STOP EDITING ----- ! #
