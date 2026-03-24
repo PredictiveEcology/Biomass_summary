@@ -32,7 +32,7 @@ defineModule(sim, list(
                           "use 'multi' to run as part of postprocessing multiple runs.")),
     defineParameter("simOutputPath", "character", outputPath(sim), NA, NA,
                     desc = "Directory specifying the location of the simulation outputs."),
-    defineParameter("studyAreaNames", "character", NA, NA, NA,
+    defineParameter("studyAreaName", "character", NA, NA, NA,
                     desc = "names of study areas simulated."),
     defineParameter("reps", "integer", 1L:10L, 1L, NA_integer_,
                     desc = paste("number of replicates/runs per study area and climate scenario.",
