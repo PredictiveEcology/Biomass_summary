@@ -9,7 +9,7 @@ defineModule(sim, list(
     person("Ian MS", "Eddy", email = "ian.eddy@nrcan-rncan.gc.ca", role = "aut")
   ),
   childModules = character(0),
-  version = list(Biomass_summary = "1.0.1"),
+  version = list(Biomass_summary = "1.0.2"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -147,8 +147,8 @@ InitMulti <- function(sim) {
 .inputObjects <- function(sim) {
   # ! ----- EDIT BELOW ----- ! #
 
-  if (!suppliedElsewhere("treeSpecies", sim)) {
-    stop("treeSpecies must be supplied.")
+  if (P(sim)$mode == "multi") {
+    stopifnot(suppliedElsewhere("treeSpecies", sim))
   }
 
   # ! ----- STOP EDITING ----- ! #
