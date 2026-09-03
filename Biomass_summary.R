@@ -44,6 +44,10 @@ defineModule(sim, list(
   ),
   inputObjects = bindrows(
     expectsInput("cohortData", "data.table", "", sourceURL = NA), ## TODO: description needed
+    expectsInput("outputsDF", "data.table",
+                 desc = paste("The rbindlisted outputs(sim) of all the sims being used; i.e., it ",
+                              "will contain all the files that may exist"),
+                 sourceURL = NA),
     expectsInput("pixelGroupMap", "SpatRaster", "", sourceURL = NA), ## TODO: description needed
     expectsInput("rasterToMatch", "SpatRaster", "template raster used for simulations", sourceURL = NA),
     expectsInput("treeSpecies", "data.table", "species name and deciduous/conifer type", sourceURL = NA)
@@ -105,41 +109,59 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
 InitMulti <- function(sim) {
   ## check for necessary output files -----------------------------------------------
   ## NOTE: don't load simLists -- slow and unreliable
-  allReps <- sprintf("rep%02d", P(sim)$reps)
+  mod$useOutputs <- NROW(sim$outputsDF) > 0
+  if (mod$useOutputs) {
+    reps_str <- sub(".*/rep(\\d+)/.*", "\\1", sim$outputsDF$file)
+    mod$allReps <- paste0("rep", sort(unique(reps_str[as.integer(reps_str) %in% P(sim)$reps])))
+  } else {
+    mod$allReps <- sprintf("rep%02d", P(sim)$reps)
+  }
   padL <- ceiling(log10(P(sim)$years[2] + 1))
   padYearStart <- paddedFloatToChar(P(sim)$years[1], padL = padL)
   padYearEnd <- paddedFloatToChar(P(sim)$years[2], padL = padL)
 
   checkPath(file.path(P(sim)$simOutputPath, "figures", currentModule(sim)), create = TRUE)
 
-  cdpgm <- fs::dir_ls(
-    P(sim)$simOutputPath,
-    regexp = "cohortData|pixelGroupMap",
-    recurse = 1,
-    type = "file"
-  ) |>
-    grep(paste0("(", paste0(P(sim)$reps, collapse = "|"), ")"), x = _, value = TRUE) |>
-    grep(paste0("_year(", paste0(P(sim)$years, collapse = "|"), ")"), x = _, value = TRUE)
+  if (mod$useOutputs) {
+    ## what the sims recorded, not what happens to be on disk: the per-rep outputs are
+    ## not necessarily under `simOutputPath`/repNN (e.g. runs restored from elsewhere).
+    mod$cdpgm <- grep(
+      value = TRUE,
+      sim$outputsDF$file,
+      pattern = "cohortData|pixelGroupMap"
+    ) |>
+      grep(paste0("(", paste0(mod$allReps, collapse = "|"), ")"), x = _, value = TRUE) |>
+      grep("gri|png|txt|xml", x = _, value = TRUE, invert = TRUE)
+  } else {
+    mod$cdpgm <- fs::dir_ls(
+      P(sim)$simOutputPath,
+      regexp = "cohortData|pixelGroupMap",
+      recurse = 1,
+      type = "file"
+    ) |>
+      grep(paste0("(", paste0(P(sim)$reps, collapse = "|"), ")"), x = _, value = TRUE) |>
+      grep(paste0("_year(", paste0(P(sim)$years, collapse = "|"), ")"), x = _, value = TRUE)
 
-  filesUserHas <- c(cdpgm)
+    filesUserHas <- c(mod$cdpgm)
 
-  dirsExpected <- file.path(P(sim)$simOutputPath, allReps)
-  filesExpected <- as.character(sapply(dirsExpected, function(d) {
-    c(
-      file.path(d, sprintf("cohortData_year%04d.qs2", P(sim)$years)),
-      file.path(d, sprintf("pixelGroupMap_year%04d.tif", P(sim)$years))
-    )
-  }))
+    dirsExpected <- file.path(P(sim)$simOutputPath, mod$allReps)
+    filesExpected <- as.character(sapply(dirsExpected, function(d) {
+      c(
+        file.path(d, sprintf("cohortData_year%04d.qs2", P(sim)$years)),
+        file.path(d, sprintf("pixelGroupMap_year%04d.tif", P(sim)$years))
+      )
+    }))
 
-  filesNeeded <- data.frame(file = filesExpected, exists = filesExpected %in% filesUserHas)
+    filesNeeded <- data.frame(file = filesExpected, exists = filesExpected %in% filesUserHas)
 
-  if (!all(filesNeeded$exists)) {
-    missing <- filesNeeded[filesNeeded$exists == FALSE, ]$file
-    stop(
-      sum(!filesNeeded$exists),
-      " simulation files appear to be missing:\n",
-      paste(missing, collapse = "\n")
-    )
+    if (!all(filesNeeded$exists)) {
+      missing <- filesNeeded[filesNeeded$exists == FALSE, ]$file
+      stop(
+        sum(!filesNeeded$exists),
+        " simulation files appear to be missing:\n",
+        paste(missing, collapse = "\n")
+      )
+    }
   }
 
   return(invisible(sim))
