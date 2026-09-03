@@ -39,8 +39,10 @@ defineModule(sim, list(
                     desc = paste("number of replicates/runs per study area and climate scenario.",
                                  "NOTE: `mclapply` is used internally, so you should set",
                                  "`options(mc.cores = nReps)` to run in parallel.")),
-    defineParameter("years", "integer", c(2011L, 2100L), NA, NA,
-                    desc = "Which two simulation years should be compared? Typically start and end years.")
+    defineParameter("years", "integer", c(NA_integer_, NA_integer_), NA, NA,
+                    desc = paste("Which two simulation years should be compared?",
+                                 "Typically start and end years.",
+                                 "Defaults to the simulation's own start and end times."))
   ),
   inputObjects = bindrows(
     expectsInput("cohortData", "data.table", "", sourceURL = NA), ## TODO: description needed
@@ -65,6 +67,9 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
   switch(
     eventType,
     init = {
+      ## resolve before the mode branch: single mode never reaches InitMulti()
+      P(sim)$years <- resolveSimYears(P(sim)$years, sim)
+
       if (P(sim)$mode == "single") {
         sim <- scheduleEvent(sim, P(sim)$years[1], "Biomass_summary", "save_single", .last())
         sim <- scheduleEvent(sim, P(sim)$years[2], "Biomass_summary", "save_single", .last())
