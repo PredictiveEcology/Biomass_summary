@@ -9,7 +9,7 @@ defineModule(sim, list(
     person("Ian MS", "Eddy", email = "ian.eddy@nrcan-rncan.gc.ca", role = "aut")
   ),
   childModules = character(0),
-  version = list(Biomass_summary = "1.0.3"),
+  version = list(Biomass_summary = "1.0.3.9000"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -33,8 +33,8 @@ defineModule(sim, list(
                           "use 'multi' to run as part of postprocessing multiple runs.")),
     defineParameter("simOutputPath", "character", outputPath(sim), NA, NA,
                     desc = "Directory specifying the location of the simulation outputs."),
-    defineParameter("studyAreaName", "character", NA, NA, NA,
-                    desc = "names of study areas simulated."),
+    defineParameter(".studyAreaName", "character", NA, NA, NA,
+                    desc = "Human-readable name of the study area simulated; usually set in `.globals`."),
     defineParameter("reps", "integer", 1L:10L, 1L, NA_integer_,
                     desc = paste("number of replicates/runs per study area and climate scenario.",
                                  "NOTE: `mclapply` is used internally, so you should set",
@@ -68,7 +68,7 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
         sim <- InitMulti(sim)
 
         f_leading_plot <- LandR::plotLeadingSpecies(
-          studyAreaName = P(sim)$studyAreaName,
+          studyAreaName = P(sim)$.studyAreaName,
           climateScenario = P(sim)$climateScenario,
           Nreps = max(P(sim)$reps),
           years = P(sim)$years,
