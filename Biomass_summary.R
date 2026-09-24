@@ -9,7 +9,7 @@ defineModule(sim, list(
     person("Ian MS", "Eddy", email = "ian.eddy@nrcan-rncan.gc.ca", role = "aut")
   ),
   childModules = character(0),
-  version = list(Biomass_summary = "1.0.3"),
+  version = list(Biomass_summary = "1.0.3.9000"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -17,7 +17,7 @@ defineModule(sim, list(
   loadOrder = list(after = c("Biomass_core")),
   reqdPkgs = list(
     "arrow", "assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
-    "purrr", "qs2", "RColorBrewer", "terra", "tidyterra",
+    "purrr", "qs2", "RColorBrewer", "reproducible", "terra", "tidyterra",
     "PredictiveEcology/LandR@development (>= 1.1.5.9100)",
     "PredictiveEcology/SpaDES.core@development (>= 3.0.3.9003)",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.1.9000)"
@@ -33,8 +33,8 @@ defineModule(sim, list(
                           "use 'multi' to run as part of postprocessing multiple runs.")),
     defineParameter("simOutputPath", "character", outputPath(sim), NA, NA,
                     desc = "Directory specifying the location of the simulation outputs."),
-    defineParameter("studyAreaName", "character", NA, NA, NA,
-                    desc = "names of study areas simulated."),
+    defineParameter(".studyAreaName", "character", NA, NA, NA,
+                    desc = "Human-readable name for the study area used. If `NA`, a hash of `rasterToMatch` will be used."),
     defineParameter("reps", "integer", 1L:10L, 1L, NA_integer_,
                     desc = paste("number of replicates/runs per study area and climate scenario.",
                                  "NOTE: `mclapply` is used internally, so you should set",
@@ -61,6 +61,9 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
   switch(
     eventType,
     init = {
+      ## the module has no studyArea, so an unnamed study area is named after its template raster
+      if (is.na(P(sim)$.studyAreaName) && !is.null(sim$rasterToMatch))
+        P(sim)$.studyAreaName <- reproducible::.robustDigest(sim$rasterToMatch, algo = "xxhash64")
       if (P(sim)$mode == "single") {
         sim <- scheduleEvent(sim, P(sim)$years[1], "Biomass_summary", "save_single", .last())
         sim <- scheduleEvent(sim, P(sim)$years[2], "Biomass_summary", "save_single", .last())
@@ -68,7 +71,7 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
         sim <- InitMulti(sim)
 
         f_leading_plot <- LandR::plotLeadingSpecies(
-          studyAreaName = P(sim)$studyAreaName,
+          studyAreaName = P(sim)$.studyAreaName,
           climateScenario = P(sim)$climateScenario,
           Nreps = max(P(sim)$reps),
           years = P(sim)$years,
