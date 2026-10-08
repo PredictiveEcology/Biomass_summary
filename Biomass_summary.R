@@ -18,7 +18,7 @@ defineModule(sim, list(
   reqdPkgs = list(
     "arrow", "assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
     "purrr", "qs2", "RColorBrewer", "reproducible", "terra", "tidyterra",
-    "PredictiveEcology/LandR@development (>= 1.1.5.9100)",
+    "PredictiveEcology/LandR@development (>= 1.2.0.9051)",
     "PredictiveEcology/SpaDES.core@development (>= 3.0.3.9003)",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.1.9000)"
   ),
@@ -34,7 +34,7 @@ defineModule(sim, list(
     defineParameter("simOutputPath", "character", outputPath(sim), NA, NA,
                     desc = "Directory specifying the location of the simulation outputs."),
     defineParameter(".studyAreaName", "character", NA, NA, NA,
-                    desc = "Human-readable name for the study area used. If `NA`, a hash of `rasterToMatch` will be used."),
+                    desc = "Human-readable name for the study area used. If `NA`, a hash of `studyAreaReporting` will be used."),
     defineParameter("reps", "integer", 1L:10L, 1L, NA_integer_,
                     desc = paste("number of replicates/runs per study area and climate scenario.",
                                  "NOTE: `mclapply` is used internally, so you should set",
@@ -46,6 +46,9 @@ defineModule(sim, list(
     expectsInput("cohortData", "data.table", "", sourceURL = NA), ## TODO: description needed
     expectsInput("pixelGroupMap", "SpatRaster", "", sourceURL = NA), ## TODO: description needed
     expectsInput("rasterToMatch", "SpatRaster", "template raster used for simulations", sourceURL = NA),
+    expectsInput("studyAreaReporting", "SpatVector",
+                 desc = paste("Optional; multi mode. Reporting area: the leading-change map is masked to it,",
+                              "and it names the study area when `.studyAreaName` is `NA`."), sourceURL = NA),
     expectsInput("treeSpecies", "data.table", "species name and deciduous/conifer type", sourceURL = NA)
   ),
   outputObjects = bindrows(
@@ -61,14 +64,29 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
   switch(
     eventType,
     init = {
-      ## the module has no studyArea, so an unnamed study area is named after its template raster
-      if (is.na(P(sim)$.studyAreaName) && !is.null(sim$rasterToMatch))
-        P(sim)$.studyAreaName <- reproducible::.robustDigest(sim$rasterToMatch, algo = "xxhash64")
+      ## `studyAreaName` was renamed `.studyAreaName` in 1.1.0; still honour the old name
+      oldStudyAreaName <- P(sim)$studyAreaName # nolint: param_used_undeclared
+      if (!is.null(oldStudyAreaName)) {
+        warning("Biomass_summary: the `studyAreaName` parameter is now `.studyAreaName`; ",
+                "please rename it.", call. = FALSE)
+        if (is.na(P(sim)$.studyAreaName))
+          P(sim)$.studyAreaName <- oldStudyAreaName
+      }
       if (P(sim)$mode == "single") {
         sim <- scheduleEvent(sim, P(sim)$years[1], "Biomass_summary", "save_single", .last())
         sim <- scheduleEvent(sim, P(sim)$years[2], "Biomass_summary", "save_single", .last())
       } else if (P(sim)$mode == "multi") {
+        if (is.na(P(sim)$.studyAreaName) && !is.null(sim$studyAreaReporting))
+          P(sim)$.studyAreaName <- reproducible::studyAreaName(sim$studyAreaReporting)
         sim <- InitMulti(sim)
+
+        ## masked, not cropped: plotLeadingSpecies() indexes each replicate's map by this raster
+        rtm <- sim$rasterToMatch
+        if (!is.null(sim$studyAreaReporting)) {
+          sar <- sim$studyAreaReporting
+          if (!inherits(sar, "SpatVector")) sar <- terra::vect(sar)
+          rtm <- terra::mask(rtm, terra::project(sar, rtm))
+        }
 
         f_leading_plot <- LandR::plotLeadingSpecies(
           studyAreaName = P(sim)$.studyAreaName,
@@ -80,7 +98,8 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
           defineLeading = LandR:::.defineLeading, ## TODO: allow user override?
           leadingPercentage = 0.8, ## TODO: allow user override?
           treeType = NULL, ## TODO: allow user override?
-          rasterToMatch = sim$rasterToMatch
+          rasterToMatch = rtm,
+          figurePath = figurePath(sim)
         )
         sim <- registerOutputs(f_leading_plot, sim)
       }
@@ -112,8 +131,6 @@ InitMulti <- function(sim) {
   padL <- ceiling(log10(P(sim)$years[2] + 1))
   padYearStart <- paddedFloatToChar(P(sim)$years[1], padL = padL)
   padYearEnd <- paddedFloatToChar(P(sim)$years[2], padL = padL)
-
-  checkPath(file.path(P(sim)$simOutputPath, "figures", currentModule(sim)), create = TRUE)
 
   cdpgm <- fs::dir_ls(
     P(sim)$simOutputPath,

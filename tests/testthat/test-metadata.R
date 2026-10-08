@@ -17,10 +17,11 @@ test_that("inputs are the expected names and classes", {
   inputs <- stats::setNames(md$inputObjects$objectClass, md$inputObjects$objectName)
   expect_identical(
     inputs[order(names(inputs))],
-    c(cohortData    = "data.table",
-      pixelGroupMap = "SpatRaster",
-      rasterToMatch = "SpatRaster",
-      treeSpecies   = "data.table")
+    c(cohortData         = "data.table",
+      pixelGroupMap      = "SpatRaster",
+      rasterToMatch      = "SpatRaster",
+      studyAreaReporting = "SpatVector",
+      treeSpecies        = "data.table")
   )
 })
 
