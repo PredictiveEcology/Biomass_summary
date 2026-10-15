@@ -1,4 +1,4 @@
-## `.studyAreaName` names the study area in figure titles and file names.
+## `.studyAreaName` names the study area in the file names `multi` mode writes.
 
 rtm <- terra::rast(nrows = 3, ncols = 3, xmin = 0, xmax = 3, ymin = 0, ymax = 3, vals = 1:9)
 
@@ -13,8 +13,18 @@ test_that("a supplied .studyAreaName is used", {
   expect_identical(SpaDES.core::P(sim, module = moduleName)$.studyAreaName, "4.2.1")
 })
 
-test_that("an NA .studyAreaName becomes a hash of rasterToMatch", {
-  sim <- initOnly(list())
-  expect_identical(SpaDES.core::P(sim, module = moduleName)$.studyAreaName,
-                   reproducible::.robustDigest(rtm, algo = "xxhash64"))
+test_that("the old studyAreaName parameter is used, with a warning", {
+  expect_warning(
+    sim <- initOnly(list(Biomass_summary = list(studyAreaName = "4.2.1"))),
+    "now `.studyAreaName`"
+  )
+  expect_identical(SpaDES.core::P(sim, module = moduleName)$.studyAreaName, "4.2.1")
+})
+
+test_that("the old studyAreaName parameter does not override .studyAreaName", {
+  expect_warning(
+    sim <- initOnly(list(Biomass_summary = list(studyAreaName = "old", .studyAreaName = "new"))),
+    "now `.studyAreaName`"
+  )
+  expect_identical(SpaDES.core::P(sim, module = moduleName)$.studyAreaName, "new")
 })

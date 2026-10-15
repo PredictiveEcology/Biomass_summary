@@ -1,7 +1,7 @@
 ---
 title: "Biomass_summary"
 author: "Alex Chubaty"
-date: "17 February 2022"
+date: "08 October 2026"
 output:
   html_document:
     df_print: paged
@@ -25,14 +25,14 @@ Intended to be used for post-simulation processing of multiple LandR Biomass sim
 Provide a summary of user-visible parameters.
 
 
-|paramName        |paramClass |default      |min |max |paramDesc                                                                                                                          |
-|:----------------|:----------|:------------|:---|:---|:----------------------------------------------------------------------------------------------------------------------------------|
-|climateScenarios |character  |NA           |NA  |NA  |names of CIMP6 climate scenarios including SSP, formatted as in ClimateNA, using underscores as separator. E.g., 'CanESM5_SSP370'. |
-|simOutputPath    |character  |outputPa.... |NA  |NA  |Directory specifying the location of the simulation outputs.                                                                       |
-|.studyAreaName   |character  |NA           |NA  |NA  |Human-readable name for the study area used. If `NA`, a hash of `rasterToMatch` will be used. |
-|reps             |integer    |1, 2, 3,.... |1   |NA  |number of replicates/runs per study area and climate scenario.                                                                     |
-|upload           |logical    |FALSE        |NA  |NA  |if TRUE, uses the `googledrive` package to upload figures.                                                                         |
-|years            |integer    |2011, 2100   |NA  |NA  |Which two simulation years should be compared? Typically start and end years.                                                      |
+|paramName       |paramClass |default      |min |max |paramDesc                                                                                                                                                             |
+|:---------------|:----------|:------------|:---|:---|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|climateScenario |character  |NA           |NA  |NA  |name of CIMP6 climate scenarios including SSP, formatted as in ClimateNA, using underscores as separator. E.g., 'CanESM5_SSP370'.                                     |
+|mode            |character  |single       |NA  |NA  |use 'single' to run part of a simulation; use 'multi' to run as part of postprocessing multiple runs.                                                                 |
+|simOutputPath   |character  |/tmp/Rtm.... |NA  |NA  |Directory specifying the location of the simulation outputs.                                                                                                          |
+|.studyAreaName  |character  |NA           |NA  |NA  |Human-readable name for the study area used. If `NA`, a hash of `studyAreaReporting` will be used.                                                                    |
+|reps            |integer    |1, 2, 3,.... |1   |NA  |number of replicates/runs per study area and climate scenario. NOTE: `mclapply` is used internally, so you should set `options(mc.cores = nReps)` to run in parallel. |
+|years           |integer    |2011, 2100   |NA  |NA  |Which two simulation years should be compared? Typically start and end years.                                                                                         |
 
 ## Plotting and saving
 
@@ -49,11 +49,13 @@ Figures can optionally be uploaded to Google Drive.
 Description of the module inputs.
 
 
-|objectName    |objectClass |desc                                                                                            |sourceURL |
-|:-------------|:-----------|:-----------------------------------------------------------------------------------------------|:---------|
-|rasterToMatch |RasterLayer |DESCRIPTION NEEDED                                                                              |NA        |
-|treeSpecies   |data.table  |DESCRIPTION NEEDED                                                                              |NA        |
-|uploadTo      |character   |if `upload = TRUE`, a named list of Google Drive folder ids, corresponding to `studyAreaNames`. |NA        |
+|objectName         |objectClass |desc                                                                                                                                     |sourceURL |
+|:------------------|:-----------|:----------------------------------------------------------------------------------------------------------------------------------------|:---------|
+|cohortData         |data.table  |                                                                                                                                         |NA        |
+|pixelGroupMap      |SpatRaster  |                                                                                                                                         |NA        |
+|rasterToMatch      |SpatRaster  |template raster used for simulations                                                                                                     |NA        |
+|studyAreaReporting |SpatVector  |Optional; multi mode. Reporting area: the leading-change map is masked to it, and it names the study area when `.studyAreaName` is `NA`. |NA        |
+|treeSpecies        |data.table  |species name and deciduous/conifer type                                                                                                  |NA        |
 
 ## Output data
 
