@@ -38,4 +38,5 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
-*.html
+## not the module's own rendered .Rmd: the render-module-rmd workflow commits
+## Biomass_summary.html back to the branch. `vignettes/*.html` above still covers built vignettes.
