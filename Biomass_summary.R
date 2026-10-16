@@ -149,12 +149,7 @@ InitMulti <- function(sim) {
       type = "file"
     )
   }
-  ## leafOnly = FALSE keeps the folder as written; the default rebuilds it unpadded
-  mod$allReps <- if (length(filesOnDisk) > 0) {
-    basename(dirnamesFromSet(filesOnDisk, P(sim)$reps, leafOnly = FALSE))
-  } else {
-    dirnamesFromSet(filesOnDisk, P(sim)$reps)
-  }
+  mod$allReps <- dirnamesFromSet(filesOnDisk, P(sim)$reps)
   pad <- padYears(P(sim)$years)
 
   if (mod$useOutputs) {
