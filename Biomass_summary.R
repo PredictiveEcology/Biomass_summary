@@ -19,7 +19,7 @@ defineModule(sim, list(
     "arrow", "assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
     "purrr", "qs2", "RColorBrewer", "reproducible", "terra", "tidyterra",
     "PredictiveEcology/LandR@development (>= 1.2.0.9051)",
-    "PredictiveEcology/SpaDES.core@development (>= 3.0.3.9003)",
+    "PredictiveEcology/SpaDES.core@development (>= 3.2.1.9038)",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.1.9000)"
   ),
   parameters = rbind(
@@ -137,7 +137,19 @@ InitMulti <- function(sim) {
   ## check for necessary output files -----------------------------------------------
   ## NOTE: don't load simLists -- slow and unreliable
   mod$useOutputs <- NROW(sim$outputsDF) > 0
-  mod$allReps <- dirnamesFromSet(sim$outputsDF$file, P(sim)$reps)
+  ## without outputsDF, the files on disk say how the rep folders are padded (rep1 or rep01)
+  cdpgmPattern <- "cohortData|pixelGroupMap"
+  filesOnDisk <- if (mod$useOutputs) {
+    sim$outputsDF$file
+  } else {
+    fs::dir_ls(
+      P(sim)$simOutputPath,
+      regexp = cdpgmPattern,
+      recurse = 1,
+      type = "file"
+    )
+  }
+  mod$allReps <- dirnamesFromSet(filesOnDisk, P(sim)$reps)
   pad <- padYears(P(sim)$years)
 
   if (mod$useOutputs) {
@@ -145,20 +157,20 @@ InitMulti <- function(sim) {
     ## not necessarily under `simOutputPath`/repNN (e.g. runs restored from elsewhere).
     mod$cdpgm <- grep(
       value = TRUE,
-      sim$outputsDF$file,
-      pattern = "cohortData|pixelGroupMap"
+      filesOnDisk,
+      pattern = cdpgmPattern
     ) |>
       grep(paste0("(", paste0(mod$allReps, collapse = "|"), ")"), x = _, value = TRUE) |>
       grep("gri|png|txt|xml", x = _, value = TRUE, invert = TRUE)
   } else {
-    mod$cdpgm <- fs::dir_ls(
-      P(sim)$simOutputPath,
-      regexp = "cohortData|pixelGroupMap",
-      recurse = 1,
-      type = "file"
-    ) |>
+    mod$cdpgm <- filesOnDisk |>
       grep(paste0("(", paste0(P(sim)$reps, collapse = "|"), ")"), x = _, value = TRUE) |>
       grep(paste0("_year(", paste0(P(sim)$years, collapse = "|"), ")"), x = _, value = TRUE)
+
+    if (length(mod$allReps) < length(P(sim)$reps)) {
+      stop("replicate folders appear to be missing under ", P(sim)$simOutputPath,
+           ": found ", length(mod$allReps), " of ", length(P(sim)$reps))
+    }
 
     filesUserHas <- c(mod$cdpgm)
 

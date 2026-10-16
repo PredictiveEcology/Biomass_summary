@@ -28,3 +28,8 @@ test_that("the old studyAreaName parameter does not override .studyAreaName", {
   )
   expect_identical(SpaDES.core::P(sim, module = moduleName)$.studyAreaName, "new")
 })
+
+test_that("the default years are the simulation's start and end times", {
+  sim <- initOnly(list(Biomass_summary = list()))
+  expect_identical(as.numeric(SpaDES.core::P(sim, module = moduleName)$years), c(2011, 2100))
+})
