@@ -138,17 +138,21 @@ InitMulti <- function(sim) {
   ## NOTE: don't load simLists -- slow and unreliable
   mod$useOutputs <- NROW(sim$outputsDF) > 0
   ## without outputsDF, the files on disk say how the rep folders are padded (rep1 or rep01)
+  cdpgmPattern <- "cohortData|pixelGroupMap"
   filesOnDisk <- if (mod$useOutputs) {
     sim$outputsDF$file
   } else {
     fs::dir_ls(
       P(sim)$simOutputPath,
-      regexp = "cohortData|pixelGroupMap",
+      regexp = cdpgmPattern,
       recurse = 1,
       type = "file"
     )
   }
-  mod$allReps <- dirnamesFromSet(filesOnDisk, P(sim)$reps)
+  ## leafOnly = FALSE keeps the folder as written; the default rebuilds it unpadded
+  mod$allReps <- character(0)
+  if (length(filesOnDisk) > 0)
+    mod$allReps <- basename(dirnamesFromSet(filesOnDisk, P(sim)$reps, leafOnly = FALSE))
   pad <- padYears(P(sim)$years)
 
   if (mod$useOutputs) {
@@ -157,7 +161,7 @@ InitMulti <- function(sim) {
     mod$cdpgm <- grep(
       value = TRUE,
       filesOnDisk,
-      pattern = "cohortData|pixelGroupMap"
+      pattern = cdpgmPattern
     ) |>
       grep(paste0("(", paste0(mod$allReps, collapse = "|"), ")"), x = _, value = TRUE) |>
       grep("gri|png|txt|xml", x = _, value = TRUE, invert = TRUE)
