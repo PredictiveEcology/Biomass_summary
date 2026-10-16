@@ -19,7 +19,7 @@ defineModule(sim, list(
     "arrow", "assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
     "purrr", "qs2", "RColorBrewer", "reproducible", "terra", "tidyterra",
     "PredictiveEcology/LandR@development (>= 1.2.0.9051)",
-    "PredictiveEcology/SpaDES.core@development (>= 3.0.3.9003)",
+    "PredictiveEcology/SpaDES.core@development (>= 3.2.1.9038)",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.1.9000)"
   ),
   parameters = rbind(
@@ -39,11 +39,17 @@ defineModule(sim, list(
                     desc = paste("number of replicates/runs per study area and climate scenario.",
                                  "NOTE: `mclapply` is used internally, so you should set",
                                  "`options(mc.cores = nReps)` to run in parallel.")),
-    defineParameter("years", "integer", c(2011L, 2100L), NA, NA,
-                    desc = "Which two simulation years should be compared? Typically start and end years.")
+    defineParameter("years", "integer", c(NA_integer_, NA_integer_), NA, NA,
+                    desc = paste("Which two simulation years should be compared?",
+                                 "Typically start and end years.",
+                                 "Defaults to the simulation's own start and end times."))
   ),
   inputObjects = bindrows(
     expectsInput("cohortData", "data.table", "", sourceURL = NA), ## TODO: description needed
+    expectsInput("outputsDF", "data.table",
+                 desc = paste("The rbindlisted outputs(sim) of all the sims being used; i.e., it ",
+                              "will contain all the files that may exist"),
+                 sourceURL = NA),
     expectsInput("pixelGroupMap", "SpatRaster", "", sourceURL = NA), ## TODO: description needed
     expectsInput("rasterToMatch", "SpatRaster", "template raster used for simulations", sourceURL = NA),
     expectsInput("studyAreaReporting", "SpatVector",
@@ -64,6 +70,9 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
   switch(
     eventType,
     init = {
+      ## resolve before the mode branch: single mode never reaches InitMulti()
+      P(sim)$years <- resolveSimYears(P(sim)$years, sim)
+
       ## `studyAreaName` was renamed `.studyAreaName` in 1.1.0; still honour the old name
       oldStudyAreaName <- P(sim)$studyAreaName # nolint: param_used_undeclared
       if (!is.null(oldStudyAreaName)) {
@@ -127,39 +136,62 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
 InitMulti <- function(sim) {
   ## check for necessary output files -----------------------------------------------
   ## NOTE: don't load simLists -- slow and unreliable
-  allReps <- sprintf("rep%02d", P(sim)$reps)
-  padL <- ceiling(log10(P(sim)$years[2] + 1))
-  padYearStart <- paddedFloatToChar(P(sim)$years[1], padL = padL)
-  padYearEnd <- paddedFloatToChar(P(sim)$years[2], padL = padL)
-
-  cdpgm <- fs::dir_ls(
-    P(sim)$simOutputPath,
-    regexp = "cohortData|pixelGroupMap",
-    recurse = 1,
-    type = "file"
-  ) |>
-    grep(paste0("(", paste0(P(sim)$reps, collapse = "|"), ")"), x = _, value = TRUE) |>
-    grep(paste0("_year(", paste0(P(sim)$years, collapse = "|"), ")"), x = _, value = TRUE)
-
-  filesUserHas <- c(cdpgm)
-
-  dirsExpected <- file.path(P(sim)$simOutputPath, allReps)
-  filesExpected <- as.character(sapply(dirsExpected, function(d) {
-    c(
-      file.path(d, sprintf("cohortData_year%04d.qs2", P(sim)$years)),
-      file.path(d, sprintf("pixelGroupMap_year%04d.tif", P(sim)$years))
+  mod$useOutputs <- NROW(sim$outputsDF) > 0
+  ## without outputsDF, the files on disk say how the rep folders are padded (rep1 or rep01)
+  cdpgmPattern <- "cohortData|pixelGroupMap"
+  filesOnDisk <- if (mod$useOutputs) {
+    sim$outputsDF$file
+  } else {
+    fs::dir_ls(
+      P(sim)$simOutputPath,
+      regexp = cdpgmPattern,
+      recurse = 1,
+      type = "file"
     )
-  }))
+  }
+  mod$allReps <- dirnamesFromSet(filesOnDisk, P(sim)$reps)
+  pad <- padYears(P(sim)$years)
 
-  filesNeeded <- data.frame(file = filesExpected, exists = filesExpected %in% filesUserHas)
+  if (mod$useOutputs) {
+    ## what the sims recorded, not what happens to be on disk: the per-rep outputs are
+    ## not necessarily under `simOutputPath`/repNN (e.g. runs restored from elsewhere).
+    mod$cdpgm <- grep(
+      value = TRUE,
+      filesOnDisk,
+      pattern = cdpgmPattern
+    ) |>
+      grep(paste0("(", paste0(mod$allReps, collapse = "|"), ")"), x = _, value = TRUE) |>
+      grep("gri|png|txt|xml", x = _, value = TRUE, invert = TRUE)
+  } else {
+    mod$cdpgm <- filesOnDisk |>
+      grep(paste0("(", paste0(P(sim)$reps, collapse = "|"), ")"), x = _, value = TRUE) |>
+      grep(paste0("_year(", paste0(P(sim)$years, collapse = "|"), ")"), x = _, value = TRUE)
 
-  if (!all(filesNeeded$exists)) {
-    missing <- filesNeeded[filesNeeded$exists == FALSE, ]$file
-    stop(
-      sum(!filesNeeded$exists),
-      " simulation files appear to be missing:\n",
-      paste(missing, collapse = "\n")
-    )
+    if (length(mod$allReps) < length(P(sim)$reps)) {
+      stop("replicate folders appear to be missing under ", P(sim)$simOutputPath,
+           ": found ", length(mod$allReps), " of ", length(P(sim)$reps))
+    }
+
+    filesUserHas <- c(mod$cdpgm)
+
+    dirsExpected <- file.path(P(sim)$simOutputPath, mod$allReps)
+    filesExpected <- as.character(sapply(dirsExpected, function(d) {
+      c(
+        file.path(d, sprintf("cohortData_year%04d.qs2", P(sim)$years)),
+        file.path(d, sprintf("pixelGroupMap_year%04d.tif", P(sim)$years))
+      )
+    }))
+
+    filesNeeded <- data.frame(file = filesExpected, exists = filesExpected %in% filesUserHas)
+
+    if (!all(filesNeeded$exists)) {
+      missing <- filesNeeded[filesNeeded$exists == FALSE, ]$file
+      stop(
+        sum(!filesNeeded$exists),
+        " simulation files appear to be missing:\n",
+        paste(missing, collapse = "\n")
+      )
+    }
   }
 
   return(invisible(sim))

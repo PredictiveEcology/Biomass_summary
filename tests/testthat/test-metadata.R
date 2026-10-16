@@ -18,6 +18,7 @@ test_that("inputs are the expected names and classes", {
   expect_identical(
     inputs[order(names(inputs))],
     c(cohortData         = "data.table",
+      outputsDF          = "data.table",
       pixelGroupMap      = "SpatRaster",
       rasterToMatch      = "SpatRaster",
       studyAreaReporting = "SpatVector",
