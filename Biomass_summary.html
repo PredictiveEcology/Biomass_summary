@@ -11,7 +11,7 @@
 
 <meta name="author" content="Alex Chubaty" />
 
-<meta name="date" content="2026-10-08" />
+<meta name="date" content="2026-10-21" />
 
 <title>Biomass_summary</title>
 
@@ -1623,7 +1623,7 @@ display: none;
 
 <h1 class="title toc-ignore">Biomass_summary</h1>
 <h4 class="author">Alex Chubaty</h4>
-<h4 class="date">08 October 2026</h4>
+<h4 class="date">21 October 2026</h4>
 
 </div>
 
@@ -1646,11 +1646,12 @@ package.</p>
 <table>
 <colgroup>
 <col width="7%" />
+<col width="4%" />
 <col width="5%" />
-<col width="6%" />
 <col width="1%" />
 <col width="1%" />
-<col width="77%" />
+<col width="74%" />
+<col width="4%" />
 </colgroup>
 <thead>
 <tr class="header">
@@ -1660,6 +1661,7 @@ package.</p>
 <th align="left">min</th>
 <th align="left">max</th>
 <th align="left">paramDesc</th>
+<th align="left">cacheKey</th>
 </tr>
 </thead>
 <tbody>
@@ -1672,6 +1674,7 @@ package.</p>
 <td align="left">name of CIMP6 climate scenarios including SSP,
 formatted as in ClimateNA, using underscores as separator. E.g.,
 ‘CanESM5_SSP370’.</td>
+<td align="left">TRUE</td>
 </tr>
 <tr class="even">
 <td align="left">mode</td>
@@ -1681,6 +1684,7 @@ formatted as in ClimateNA, using underscores as separator. E.g.,
 <td align="left">NA</td>
 <td align="left">use ‘single’ to run part of a simulation; use ‘multi’
 to run as part of postprocessing multiple runs.</td>
+<td align="left">TRUE</td>
 </tr>
 <tr class="odd">
 <td align="left">simOutputPath</td>
@@ -1690,6 +1694,7 @@ to run as part of postprocessing multiple runs.</td>
 <td align="left">NA</td>
 <td align="left">Directory specifying the location of the simulation
 outputs.</td>
+<td align="left">TRUE</td>
 </tr>
 <tr class="even">
 <td align="left">.studyAreaName</td>
@@ -1700,6 +1705,7 @@ outputs.</td>
 <td align="left">Human-readable name for the study area used. If
 <code>NA</code>, a hash of <code>studyAreaReporting</code> will be
 used.</td>
+<td align="left">TRUE</td>
 </tr>
 <tr class="odd">
 <td align="left">reps</td>
@@ -1710,15 +1716,18 @@ used.</td>
 <td align="left">number of replicates/runs per study area and climate
 scenario. NOTE: <code>mclapply</code> is used internally, so you should
 set <code>options(mc.cores = nReps)</code> to run in parallel.</td>
+<td align="left">TRUE</td>
 </tr>
 <tr class="even">
 <td align="left">years</td>
 <td align="left">integer</td>
-<td align="left">2011, 2100</td>
+<td align="left">NA, NA</td>
 <td align="left">NA</td>
 <td align="left">NA</td>
 <td align="left">Which two simulation years should be compared?
-Typically start and end years.</td>
+Typically start and end years. Defaults to the simulation’s own start
+and end times.</td>
+<td align="left">TRUE</td>
 </tr>
 </tbody>
 </table>
@@ -1760,18 +1769,25 @@ rasters are written to disk.</p>
 <td align="left">NA</td>
 </tr>
 <tr class="even">
+<td align="left">outputsDF</td>
+<td align="left">data.table</td>
+<td align="left">The rbindlisted outputs(sim) of all the sims being
+used; i.e., it will contain all the files that may exist</td>
+<td align="left">NA</td>
+</tr>
+<tr class="odd">
 <td align="left">pixelGroupMap</td>
 <td align="left">SpatRaster</td>
 <td align="left"></td>
 <td align="left">NA</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td align="left">rasterToMatch</td>
 <td align="left">SpatRaster</td>
 <td align="left">template raster used for simulations</td>
 <td align="left">NA</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td align="left">studyAreaReporting</td>
 <td align="left">SpatVector</td>
 <td align="left">Optional; multi mode. Reporting area: the
@@ -1779,7 +1795,7 @@ leading-change map is masked to it, and it names the study area when
 <code>.studyAreaName</code> is <code>NA</code>.</td>
 <td align="left">NA</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td align="left">treeSpecies</td>
 <td align="left">data.table</td>
 <td align="left">species name and deciduous/conifer type</td>
