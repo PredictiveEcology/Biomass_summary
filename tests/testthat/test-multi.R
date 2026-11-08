@@ -3,7 +3,7 @@
 
 rtm <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 2, vals = 1)
 
-runMulti <- function(objects, outputPath) {
+runMulti <- function(objects, outputPath, outputsDF = FALSE) {
   repDir <- file.path(outputPath, "rep01")
   dir.create(repDir)
   pixelGroupMap <- terra::rast(rtm, vals = 1:4)
@@ -17,6 +17,7 @@ runMulti <- function(objects, outputPath) {
     Species = c("Pice_mar", "Popu_tre"), Type = c("Conifer", "Deciduous")
   )
 
+  if (outputsDF) objects$outputsDF <- data.table::data.table(file = list.files(repDir, full.names = TRUE))
   paths <- testPaths
   paths$outputPath <- outputPath
   sim <- SpaDES.core::simInit(
@@ -54,4 +55,11 @@ test_that("multi mode without studyAreaReporting leaves the map unmasked and the
   expect_true(is.na(SpaDES.core::P(sim, module = moduleName)$.studyAreaName))
   leadingChange <- terra::rast(file.path(outputPath, "leadingChange_NA_CanESM5_SSP370.tif"))
   expect_identical(as.vector(terra::values(leadingChange)), c(1, 1, 1, 1))
+})
+
+test_that("multi mode takes the replicate folders from outputsDF when it is supplied", {
+  withr::local_options(mc.cores = 1L)
+  outputPath <- withr::local_tempdir()
+  sim <- runMulti(list(), outputPath, outputsDF = TRUE)
+  expect_true(file.exists(file.path(outputPath, "leadingChange_NA_CanESM5_SSP370.tif")))
 })
