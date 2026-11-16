@@ -39,3 +39,10 @@ test_that("parameters are the expected names", {
            "years"))
   )
 })
+
+test_that("`simOutputPath` is not part of the module's cache keys", {
+  ## single mode never reads it; it only says where multi mode finds the replicates and writes figures
+  p <- SpaDES.core::moduleMetadata(module = moduleName, path = modulePath)$parameters
+  expect_false(p$cacheKey[p$paramName == "simOutputPath"])
+  expect_true(all(p$cacheKey[p$paramName != "simOutputPath"]))
+})

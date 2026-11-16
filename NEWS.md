@@ -1,5 +1,6 @@
 # Biomass_summary (development version)
 
+- `simOutputPath` is no longer part of the module's event cache keys (`defineParameter(cacheKey = FALSE)`; SpaDES.core >= 3.2.1.9047). Single mode never reads it (a default of `outputPath(sim)`, which differs between machines); multi mode is not cached by default. The event cache keys of this module change once.
 - `multi` mode reads the replicate outputs from the `outputsDF` input (`outputs(sim)` of the sims being
   summarised) when it is supplied, rather than globbing `simOutputPath`. Without it, the replicate folder
   names (`rep1` or `rep01`) are taken from the files found on disk.
