@@ -1,7 +1,7 @@
 ---
 title: "Biomass_summary"
 author: "Alex Chubaty"
-date: "21 October 2026"
+date: "16 November 2026"
 output:
   html_document:
     df_print: paged
@@ -25,14 +25,14 @@ Intended to be used for post-simulation processing of multiple LandR Biomass sim
 Provide a summary of user-visible parameters.
 
 
-|paramName       |paramClass |default      |min |max |paramDesc                                                                                                                                                             |cacheKey |
-|:---------------|:----------|:------------|:---|:---|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------|
-|climateScenario |character  |NA           |NA  |NA  |name of CIMP6 climate scenarios including SSP, formatted as in ClimateNA, using underscores as separator. E.g., 'CanESM5_SSP370'.                                     |TRUE     |
-|mode            |character  |single       |NA  |NA  |use 'single' to run part of a simulation; use 'multi' to run as part of postprocessing multiple runs.                                                                 |TRUE     |
-|simOutputPath   |character  |/tmp/Rtm.... |NA  |NA  |Directory specifying the location of the simulation outputs.                                                                                                          |TRUE     |
-|.studyAreaName  |character  |NA           |NA  |NA  |Human-readable name for the study area used. If `NA`, a hash of `studyAreaReporting` will be used.                                                                    |TRUE     |
-|reps            |integer    |1, 2, 3,.... |1   |NA  |number of replicates/runs per study area and climate scenario. NOTE: `mclapply` is used internally, so you should set `options(mc.cores = nReps)` to run in parallel. |TRUE     |
-|years           |integer    |NA, NA       |NA  |NA  |Which two simulation years should be compared? Typically start and end years. Defaults to the simulation's own start and end times.                                   |TRUE     |
+|paramName       |paramClass |default      |min |max |paramDesc                                                                                                                                                                                                                        |cacheKey |
+|:---------------|:----------|:------------|:---|:---|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------|
+|climateScenario |character  |NA           |NA  |NA  |name of CIMP6 climate scenarios including SSP, formatted as in ClimateNA, using underscores as separator. E.g., 'CanESM5_SSP370'.                                                                                                |TRUE     |
+|mode            |character  |single       |NA  |NA  |use 'single' to run part of a simulation; use 'multi' to run as part of postprocessing multiple runs.                                                                                                                            |TRUE     |
+|simOutputPath   |character  |/tmp/Rtm.... |NA  |NA  |Directory specifying the location of the simulation outputs. Not part of the event cache key: in multi mode, which reads the replicate folders under it, keep `.useCache` off, or a changed folder would give a stale cache hit. |FALSE    |
+|.studyAreaName  |character  |NA           |NA  |NA  |Human-readable name for the study area used. If `NA`, a hash of `studyAreaReporting` will be used.                                                                                                                               |TRUE     |
+|reps            |integer    |1, 2, 3,.... |1   |NA  |number of replicates/runs per study area and climate scenario. NOTE: `mclapply` is used internally, so you should set `options(mc.cores = nReps)` to run in parallel.                                                            |TRUE     |
+|years           |integer    |NA, NA       |NA  |NA  |Which two simulation years should be compared? Typically start and end years. Defaults to the simulation's own start and end times.                                                                                              |TRUE     |
 
 ## Plotting and saving
 
