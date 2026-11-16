@@ -7,9 +7,9 @@ name: Render module Rmd
 
 on:
   pull_request:
-    branches: [main, master, development]
+    branches: [main, master, development, modsForFireSense]
   push:
-    branches: [main, master, development]
+    branches: [main, master, development, modsForFireSense]
     paths:
       - .github/workflows/render-module-rmd.yaml
       - Biomass_summary.R

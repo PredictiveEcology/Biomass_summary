@@ -1,3 +1,12 @@
+# Biomass_summary (development version)
+
+- `simOutputPath` is no longer part of the module's event cache keys (`defineParameter(cacheKey = FALSE)`; SpaDES.core >= 3.2.1.9047). Single mode never reads it (a default of `outputPath(sim)`, which differs between machines); multi mode is not cached by default. The event cache keys of this module change once.
+- `multi` mode reads the replicate outputs from the `outputsDF` input (`outputs(sim)` of the sims being
+  summarised) when it is supplied, rather than globbing `simOutputPath`. Without it, the replicate folder
+  names (`rep1` or `rep01`) are taken from the files found on disk.
+- The `years` parameter defaults to `NA`, meaning the simulation's own start and end times.
+- Needs SpaDES.core 3.2.1.9038 or later (`dirnamesFromSet()`, `padYears()`, `resolveSimYears()`).
+
 # Biomass_summary 1.1.0
 
 This release brings Biomass_summary in line with the other LandR and fireSense modules. The study area name setting now has the same name it has everywhere else, and when no name is set, the module makes one from the reporting area, if it is given one. The module also states that it runs after Biomass_core, so it is scheduled in the right order without extra setup.
