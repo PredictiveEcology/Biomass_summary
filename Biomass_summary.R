@@ -19,7 +19,7 @@ defineModule(sim, list(
     "arrow", "assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
     "purrr", "qs2", "RColorBrewer", "reproducible", "terra", "tidyterra",
     "PredictiveEcology/LandR@development (>= 1.2.0.9051)",
-    "PredictiveEcology/SpaDES.core@development (>= 3.2.1.9038)",
+    "PredictiveEcology/SpaDES.core@development (>= 3.2.1.9047)", # defineParameter(cacheKey = FALSE)
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.1.9000)"
   ),
   parameters = rbind(
@@ -32,7 +32,10 @@ defineModule(sim, list(
                     paste("use 'single' to run part of a simulation;",
                           "use 'multi' to run as part of postprocessing multiple runs.")),
     defineParameter("simOutputPath", "character", outputPath(sim), NA, NA,
-                    desc = "Directory specifying the location of the simulation outputs."),
+                    desc = paste("Directory specifying the location of the simulation outputs.",
+                                 "Not part of the event cache key: in multi mode, which reads the replicate folders under it,",
+                                 "keep `.useCache` off, or a changed folder would give a stale cache hit."),
+                    cacheKey = FALSE), # single mode never reads it; a path differs between machines
     defineParameter(".studyAreaName", "character", NA, NA, NA,
                     desc = "Human-readable name for the study area used. If `NA`, a hash of `studyAreaReporting` will be used."),
     defineParameter("reps", "integer", 1L:10L, 1L, NA_integer_,
