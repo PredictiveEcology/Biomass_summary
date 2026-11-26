@@ -9,7 +9,7 @@ defineModule(sim, list(
     person("Ian MS", "Eddy", email = "ian.eddy@nrcan-rncan.gc.ca", role = "aut")
   ),
   childModules = character(0),
-  version = list(Biomass_summary = "1.1.0"),
+  version = list(Biomass_summary = "1.1.2"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -18,8 +18,8 @@ defineModule(sim, list(
   reqdPkgs = list(
     "arrow", "assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
     "purrr", "qs2", "RColorBrewer", "reproducible", "terra", "tidyterra",
-    "PredictiveEcology/LandR@development (>= 1.2.0.9051)",
-    "PredictiveEcology/SpaDES.core@development (>= 3.0.3.9003)",
+    "PredictiveEcology/LandR@development (>= 1.2.0.9065)", # plotLeadingSpecies(reps)
+    "PredictiveEcology/SpaDES.core@development (>= 3.2.1.9047)", # defineParameter(cacheKey = FALSE)
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.1.9000)"
   ),
   parameters = rbind(
@@ -32,18 +32,28 @@ defineModule(sim, list(
                     paste("use 'single' to run part of a simulation;",
                           "use 'multi' to run as part of postprocessing multiple runs.")),
     defineParameter("simOutputPath", "character", outputPath(sim), NA, NA,
-                    desc = "Directory specifying the location of the simulation outputs."),
+                    desc = paste("Directory specifying the location of the simulation outputs.",
+                                 "Not part of the event cache key: in multi mode, which reads the replicate folders under it,",
+                                 "keep `.useCache` off, or a changed folder would give a stale cache hit."),
+                    cacheKey = FALSE), # single mode never reads it; a path differs between machines
     defineParameter(".studyAreaName", "character", NA, NA, NA,
                     desc = "Human-readable name for the study area used. If `NA`, a hash of `studyAreaReporting` will be used."),
     defineParameter("reps", "integer", 1L:10L, 1L, NA_integer_,
-                    desc = paste("number of replicates/runs per study area and climate scenario.",
+                    desc = paste("the replicates/runs to summarise per study area and climate scenario",
+                                 "(e.g., `c(2, 4)` reads only rep02 and rep04).",
                                  "NOTE: `mclapply` is used internally, so you should set",
                                  "`options(mc.cores = nReps)` to run in parallel.")),
-    defineParameter("years", "integer", c(2011L, 2100L), NA, NA,
-                    desc = "Which two simulation years should be compared? Typically start and end years.")
+    defineParameter("years", "integer", c(NA_integer_, NA_integer_), NA, NA,
+                    desc = paste("Which two simulation years should be compared?",
+                                 "Typically start and end years.",
+                                 "Defaults to the simulation's own start and end times."))
   ),
   inputObjects = bindrows(
     expectsInput("cohortData", "data.table", "", sourceURL = NA), ## TODO: description needed
+    expectsInput("outputsDF", "data.table",
+                 desc = paste("The rbindlisted outputs(sim) of all the sims being used; i.e., it ",
+                              "will contain all the files that may exist"),
+                 sourceURL = NA),
     expectsInput("pixelGroupMap", "SpatRaster", "", sourceURL = NA), ## TODO: description needed
     expectsInput("rasterToMatch", "SpatRaster", "template raster used for simulations", sourceURL = NA),
     expectsInput("studyAreaReporting", "SpatVector",
@@ -64,6 +74,9 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
   switch(
     eventType,
     init = {
+      ## resolve before the mode branch: single mode never reaches InitMulti()
+      P(sim)$years <- resolveSimYears(P(sim)$years, sim)
+
       ## `studyAreaName` was renamed `.studyAreaName` in 1.1.0; still honour the old name
       oldStudyAreaName <- P(sim)$studyAreaName # nolint: param_used_undeclared
       if (!is.null(oldStudyAreaName)) {
@@ -91,7 +104,7 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
         f_leading_plot <- LandR::plotLeadingSpecies(
           studyAreaName = P(sim)$.studyAreaName,
           climateScenario = P(sim)$climateScenario,
-          Nreps = max(P(sim)$reps),
+          reps = P(sim)$reps,
           years = P(sim)$years,
           outputDir = P(sim)$simOutputPath,
           treeSpecies = sim$treeSpecies,
@@ -127,39 +140,62 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
 InitMulti <- function(sim) {
   ## check for necessary output files -----------------------------------------------
   ## NOTE: don't load simLists -- slow and unreliable
-  allReps <- sprintf("rep%02d", P(sim)$reps)
-  padL <- ceiling(log10(P(sim)$years[2] + 1))
-  padYearStart <- paddedFloatToChar(P(sim)$years[1], padL = padL)
-  padYearEnd <- paddedFloatToChar(P(sim)$years[2], padL = padL)
-
-  cdpgm <- fs::dir_ls(
-    P(sim)$simOutputPath,
-    regexp = "cohortData|pixelGroupMap",
-    recurse = 1,
-    type = "file"
-  ) |>
-    grep(paste0("(", paste0(P(sim)$reps, collapse = "|"), ")"), x = _, value = TRUE) |>
-    grep(paste0("_year(", paste0(P(sim)$years, collapse = "|"), ")"), x = _, value = TRUE)
-
-  filesUserHas <- c(cdpgm)
-
-  dirsExpected <- file.path(P(sim)$simOutputPath, allReps)
-  filesExpected <- as.character(sapply(dirsExpected, function(d) {
-    c(
-      file.path(d, sprintf("cohortData_year%04d.qs2", P(sim)$years)),
-      file.path(d, sprintf("pixelGroupMap_year%04d.tif", P(sim)$years))
+  mod$useOutputs <- NROW(sim$outputsDF) > 0
+  ## without outputsDF, the files on disk say how the rep folders are padded (rep1 or rep01)
+  cdpgmPattern <- "cohortData|pixelGroupMap"
+  filesOnDisk <- if (mod$useOutputs) {
+    sim$outputsDF$file
+  } else {
+    fs::dir_ls(
+      P(sim)$simOutputPath,
+      regexp = cdpgmPattern,
+      recurse = 1,
+      type = "file"
     )
-  }))
+  }
+  mod$allReps <- dirnamesFromSet(filesOnDisk, P(sim)$reps)
+  pad <- padYears(P(sim)$years)
 
-  filesNeeded <- data.frame(file = filesExpected, exists = filesExpected %in% filesUserHas)
+  if (mod$useOutputs) {
+    ## what the sims recorded, not what happens to be on disk: the per-rep outputs are
+    ## not necessarily under `simOutputPath`/repNN (e.g. runs restored from elsewhere).
+    mod$cdpgm <- grep(
+      value = TRUE,
+      filesOnDisk,
+      pattern = cdpgmPattern
+    ) |>
+      grep(paste0("(", paste0(mod$allReps, collapse = "|"), ")"), x = _, value = TRUE) |>
+      grep("gri|png|txt|xml", x = _, value = TRUE, invert = TRUE)
+  } else {
+    mod$cdpgm <- filesOnDisk |>
+      grep(paste0("(", paste0(P(sim)$reps, collapse = "|"), ")"), x = _, value = TRUE) |>
+      grep(paste0("_year(", paste0(P(sim)$years, collapse = "|"), ")"), x = _, value = TRUE)
 
-  if (!all(filesNeeded$exists)) {
-    missing <- filesNeeded[filesNeeded$exists == FALSE, ]$file
-    stop(
-      sum(!filesNeeded$exists),
-      " simulation files appear to be missing:\n",
-      paste(missing, collapse = "\n")
-    )
+    if (length(mod$allReps) < length(P(sim)$reps)) {
+      stop("replicate folders appear to be missing under ", P(sim)$simOutputPath,
+           ": found ", length(mod$allReps), " of ", length(P(sim)$reps))
+    }
+
+    filesUserHas <- c(mod$cdpgm)
+
+    dirsExpected <- file.path(P(sim)$simOutputPath, mod$allReps)
+    filesExpected <- as.character(sapply(dirsExpected, function(d) {
+      c(
+        file.path(d, sprintf("cohortData_year%04d.qs2", P(sim)$years)),
+        file.path(d, sprintf("pixelGroupMap_year%04d.tif", P(sim)$years))
+      )
+    }))
+
+    filesNeeded <- data.frame(file = filesExpected, exists = filesExpected %in% filesUserHas)
+
+    if (!all(filesNeeded$exists)) {
+      missing <- filesNeeded[filesNeeded$exists == FALSE, ]$file
+      stop(
+        sum(!filesNeeded$exists),
+        " simulation files appear to be missing:\n",
+        paste(missing, collapse = "\n")
+      )
+    }
   }
 
   return(invisible(sim))
