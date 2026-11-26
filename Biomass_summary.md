@@ -1,7 +1,7 @@
 ---
 title: "Biomass_summary"
 author: "Alex Chubaty"
-date: "16 November 2026"
+date: "26 November 2026"
 output:
   html_document:
     df_print: paged
@@ -31,7 +31,7 @@ Provide a summary of user-visible parameters.
 |mode            |character  |single       |NA  |NA  |use 'single' to run part of a simulation; use 'multi' to run as part of postprocessing multiple runs.                                                                                                                            |TRUE     |
 |simOutputPath   |character  |/tmp/Rtm.... |NA  |NA  |Directory specifying the location of the simulation outputs. Not part of the event cache key: in multi mode, which reads the replicate folders under it, keep `.useCache` off, or a changed folder would give a stale cache hit. |FALSE    |
 |.studyAreaName  |character  |NA           |NA  |NA  |Human-readable name for the study area used. If `NA`, a hash of `studyAreaReporting` will be used.                                                                                                                               |TRUE     |
-|reps            |integer    |1, 2, 3,.... |1   |NA  |number of replicates/runs per study area and climate scenario. NOTE: `mclapply` is used internally, so you should set `options(mc.cores = nReps)` to run in parallel.                                                            |TRUE     |
+|reps            |integer    |1, 2, 3,.... |1   |NA  |the replicates/runs to summarise per study area and climate scenario (e.g., `c(2, 4)` reads only rep02 and rep04). NOTE: `mclapply` is used internally, so you should set `options(mc.cores = nReps)` to run in parallel.        |TRUE     |
 |years           |integer    |NA, NA       |NA  |NA  |Which two simulation years should be compared? Typically start and end years. Defaults to the simulation's own start and end times.                                                                                              |TRUE     |
 
 ## Plotting and saving
