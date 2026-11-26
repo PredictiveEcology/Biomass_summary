@@ -9,7 +9,7 @@ defineModule(sim, list(
     person("Ian MS", "Eddy", email = "ian.eddy@nrcan-rncan.gc.ca", role = "aut")
   ),
   childModules = character(0),
-  version = list(Biomass_summary = "1.1.1"),
+  version = list(Biomass_summary = "1.1.2"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -18,7 +18,7 @@ defineModule(sim, list(
   reqdPkgs = list(
     "arrow", "assertthat", "cowplot", "data.table", "fs", "ggplot2", "googledrive",
     "purrr", "qs2", "RColorBrewer", "reproducible", "terra", "tidyterra",
-    "PredictiveEcology/LandR@development (>= 1.2.0.9051)",
+    "PredictiveEcology/LandR@development (>= 1.2.0.9065)", # plotLeadingSpecies(reps)
     "PredictiveEcology/SpaDES.core@development (>= 3.2.1.9047)", # defineParameter(cacheKey = FALSE)
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.1.9000)"
   ),
@@ -39,7 +39,8 @@ defineModule(sim, list(
     defineParameter(".studyAreaName", "character", NA, NA, NA,
                     desc = "Human-readable name for the study area used. If `NA`, a hash of `studyAreaReporting` will be used."),
     defineParameter("reps", "integer", 1L:10L, 1L, NA_integer_,
-                    desc = paste("number of replicates/runs per study area and climate scenario.",
+                    desc = paste("the replicates/runs to summarise per study area and climate scenario",
+                                 "(e.g., `c(2, 4)` reads only rep02 and rep04).",
                                  "NOTE: `mclapply` is used internally, so you should set",
                                  "`options(mc.cores = nReps)` to run in parallel.")),
     defineParameter("years", "integer", c(NA_integer_, NA_integer_), NA, NA,
@@ -103,7 +104,7 @@ doEvent.Biomass_summary = function(sim, eventTime, eventType) {
         f_leading_plot <- LandR::plotLeadingSpecies(
           studyAreaName = P(sim)$.studyAreaName,
           climateScenario = P(sim)$climateScenario,
-          Nreps = max(P(sim)$reps),
+          reps = P(sim)$reps,
           years = P(sim)$years,
           outputDir = P(sim)$simOutputPath,
           treeSpecies = sim$treeSpecies,
